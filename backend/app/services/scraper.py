@@ -8,6 +8,12 @@ from typing import Any, AsyncIterator
 import httpx
 from bs4 import BeautifulSoup, Tag
 
+try:
+    from playwright.async_api import async_playwright
+    _PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    _PLAYWRIGHT_AVAILABLE = False
+
 
 # Elements to remove before extracting content
 STRIP_TAGS = [
@@ -141,6 +147,7 @@ async def scrape_site(
     max_depth: int = 3,
     parallel: bool = False,
     concurrency: int = 8,
+    use_playwright: bool = False,
 ) -> list[dict[str, Any]]:
     """Scrape a documentation site.
 
@@ -150,16 +157,24 @@ async def scrape_site(
         max_depth: Maximum link depth from root.
         parallel: If True, use concurrent fetching.
         concurrency: Max simultaneous requests in parallel mode.
+        use_playwright: If True, use headless Chromium instead of httpx.
 
     Returns:
         List of dicts with keys: id, url, title, html.
     """
     results: list[dict[str, Any]] = []
-    stream = (
-        scrape_site_stream_parallel(url, max_pages, max_depth, concurrency)
-        if parallel
-        else scrape_site_stream(url, max_pages, max_depth)
-    )
+    if use_playwright:
+        stream = (
+            scrape_site_stream_playwright_parallel(url, max_pages, max_depth, concurrency)
+            if parallel
+            else scrape_site_stream_playwright(url, max_pages, max_depth)
+        )
+    else:
+        stream = (
+            scrape_site_stream_parallel(url, max_pages, max_depth, concurrency)
+            if parallel
+            else scrape_site_stream(url, max_pages, max_depth)
+        )
     async for event in stream:
         if event["type"] == "page_scraped":
             results.append(event["page"])
@@ -351,4 +366,196 @@ async def scrape_site_stream_parallel(
     # Final drain (any stragglers)
     while not event_queue.empty():
         yield await event_queue.get()
+
+
+async def scrape_site_stream_playwright(
+    url: str,
+    max_pages: int = 50,
+    max_depth: int = 3,
+) -> AsyncIterator[dict[str, Any]]:
+    """Scrape via sequential BFS using a headless Playwright browser.
+
+    Falls back to an error event if Playwright is not installed.
+    Yields the same event shapes as scrape_site_stream.
+    """
+    if not _PLAYWRIGHT_AVAILABLE:
+        yield {
+            "type": "page_skipped",
+            "url": url,
+            "reason": "playwright_not_installed",
+        }
+        return
+
+    base_url = _normalize_url(url)
+    visited: set[str] = set()
+    scraped_count = 0
+    queue: list[tuple[str, int]] = [(base_url, 0)]
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent="Anthology/1.0 (Documentation Scraper)",
+        )
+        page = await context.new_page()
+
+        try:
+            while queue and scraped_count < max_pages:
+                current_url, depth = queue.pop(0)
+
+                if current_url in visited:
+                    continue
+                visited.add(current_url)
+
+                try:
+                    response = await page.goto(current_url, wait_until="networkidle", timeout=30_000)
+
+                    if response is None or not response.ok:
+                        yield {"type": "page_skipped", "url": current_url, "reason": "error"}
+                        continue
+
+                    content_type = response.headers.get("content-type", "")
+                    if "text/html" not in content_type:
+                        yield {"type": "page_skipped", "url": current_url, "reason": "not_html"}
+                        continue
+
+                    html = await page.content()
+                    soup = BeautifulSoup(html, "html.parser")
+                    title = _extract_title(soup)
+                    content = _extract_content(soup)
+
+                    if content:
+                        scraped_count += 1
+                        yield {
+                            "type": "page_scraped",
+                            "page": {
+                                "id": _make_page_id(current_url),
+                                "url": current_url,
+                                "title": title,
+                                "html": str(content),
+                            },
+                            "scraped": scraped_count,
+                            "queued": len(queue),
+                        }
+
+                    if depth < max_depth:
+                        new_links = _extract_links(soup, current_url, base_url)
+                        for link in new_links:
+                            if link not in visited:
+                                queue.append((link, depth + 1))
+
+                except Exception:
+                    yield {"type": "page_skipped", "url": current_url, "reason": "error"}
+                    continue
+        finally:
+            await browser.close()
+
+
+async def scrape_site_stream_playwright_parallel(
+    url: str,
+    max_pages: int = 50,
+    max_depth: int = 3,
+    concurrency: int = 4,
+) -> AsyncIterator[dict[str, Any]]:
+    """Scrape via parallel BFS using a headless Playwright browser.
+
+    Uses a shared browser context with a semaphore to cap concurrent pages.
+    Falls back to an error event if Playwright is not installed.
+    Yields the same event shapes as scrape_site_stream.
+    """
+    if not _PLAYWRIGHT_AVAILABLE:
+        yield {
+            "type": "page_skipped",
+            "url": url,
+            "reason": "playwright_not_installed",
+        }
+        return
+
+    base_url = _normalize_url(url)
+    visited: set[str] = set()
+    state = {"scraped": 0}
+    sem = asyncio.Semaphore(concurrency)
+    event_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent="Anthology/1.0 (Documentation Scraper)",
+        )
+
+        new_tasks: list[asyncio.Task] = []
+
+        async def fetch_page(page_url: str, depth: int) -> None:
+            async with sem:
+                page = await context.new_page()
+                try:
+                    response = await page.goto(page_url, wait_until="networkidle", timeout=30_000)
+
+                    if response is None or not response.ok:
+                        await event_queue.put({"type": "page_skipped", "url": page_url, "reason": "error"})
+                        return
+
+                    content_type = response.headers.get("content-type", "")
+                    if "text/html" not in content_type:
+                        await event_queue.put({"type": "page_skipped", "url": page_url, "reason": "not_html"})
+                        return
+
+                    html = await page.content()
+                    soup = BeautifulSoup(html, "html.parser")
+                    title = _extract_title(soup)
+                    content = _extract_content(soup)
+
+                    if content and state["scraped"] < max_pages:
+                        state["scraped"] += 1
+                        await event_queue.put({
+                            "type": "page_scraped",
+                            "page": {
+                                "id": _make_page_id(page_url),
+                                "url": page_url,
+                                "title": title,
+                                "html": str(content),
+                            },
+                            "scraped": state["scraped"],
+                            "queued": 0,
+                        })
+
+                    if depth < max_depth and state["scraped"] < max_pages:
+                        new_links = _extract_links(soup, page_url, base_url)
+                        for link in new_links:
+                            if link not in visited:
+                                visited.add(link)
+                                new_tasks.append(asyncio.create_task(fetch_page(link, depth + 1)))
+
+                except Exception:
+                    await event_queue.put({"type": "page_skipped", "url": page_url, "reason": "error"})
+                finally:
+                    await page.close()
+
+        visited.add(base_url)
+        root_task = asyncio.create_task(fetch_page(base_url, 0))
+        all_tasks: list[asyncio.Task] = [root_task]
+
+        try:
+            while all_tasks:
+                all_tasks.extend(new_tasks)
+                new_tasks.clear()
+
+                if state["scraped"] >= max_pages:
+                    for task in all_tasks:
+                        task.cancel()
+                    await asyncio.gather(*all_tasks, return_exceptions=True)
+                    break
+
+                done, pending_set = await asyncio.wait(all_tasks, return_when=asyncio.FIRST_COMPLETED)
+                all_tasks = list(pending_set)
+
+                all_tasks.extend(new_tasks)
+                new_tasks.clear()
+
+                while not event_queue.empty():
+                    yield await event_queue.get()
+        finally:
+            await browser.close()
+
+        while not event_queue.empty():
+            yield await event_queue.get()
 

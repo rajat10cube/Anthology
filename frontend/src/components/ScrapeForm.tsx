@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Globe, Settings2, Zap, FileText, Loader2, CheckCircle2, ArrowRight, Gauge } from "lucide-react";
+import { Globe, Settings2, Zap, FileText, Loader2, CheckCircle2, ArrowRight, Gauge, Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -12,6 +12,7 @@ export function ScrapeForm() {
   const [maxPages, setMaxPages] = useState(50);
   const [maxDepth, setMaxDepth] = useState(3);
   const [parallel, setParallel] = useState(true);
+  const [usePlaywright, setUsePlaywright] = useState(false);
   const {
     isLoading, error, result, phase,
     scrapedPages, scrapedCount, queuedCount, siteName,
@@ -114,7 +115,7 @@ export function ScrapeForm() {
               ) : (
                 <>
                   <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  {queuedCount > 0 ? `${queuedCount} pages queued` : "Discovering pages..."}
+                  {queuedCount > 0 ? `${Math.min(queuedCount, maxPages - scrapedCount)} pages queued` : "Discovering pages..."}
                 </>
               )}
             </span>
@@ -172,6 +173,7 @@ export function ScrapeForm() {
       max_pages: maxPages,
       max_depth: maxDepth,
       parallel,
+      use_playwright: usePlaywright,
     });
   };
 
@@ -266,6 +268,27 @@ export function ScrapeForm() {
               {parallel
                 ? <><Gauge className="w-3.5 h-3.5" />Parallel</>
                 : <><Zap className="w-3.5 h-3.5" />Sequential</>}
+            </span>
+          </div>
+        </div>
+        {/* Playwright toggle */}
+        <div className="flex flex-col justify-between gap-1">
+          <label className="text-sm text-muted-foreground block" title="Use headless browser for JS-rendered sites">
+            Headless Browser
+          </label>
+          <div className="flex items-center gap-2 py-2">
+            <Switch
+              id="playwright-toggle"
+              checked={usePlaywright}
+              onCheckedChange={setUsePlaywright}
+              disabled={isLoading || !showAdvanced}
+            />
+            <span className={`w-24 text-sm font-medium flex items-center gap-1 ${
+              usePlaywright ? "text-primary" : "text-muted-foreground"
+            }`}>
+              {usePlaywright
+                ? <><Monitor className="w-3.5 h-3.5" />Playwright</>
+                : <><Zap className="w-3.5 h-3.5" />HTTP</>}
             </span>
           </div>
         </div>

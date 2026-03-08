@@ -52,6 +52,7 @@ export interface ScrapeRequest {
   max_depth?: number;
   job_id?: string;
   parallel?: boolean;
+  use_playwright?: boolean;
 }
 
 export interface ScrapeResponse {

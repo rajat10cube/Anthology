@@ -6,7 +6,13 @@ from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from app.services.scraper import scrape_site, scrape_site_stream, scrape_site_stream_parallel
+from app.services.scraper import (
+    scrape_site,
+    scrape_site_stream,
+    scrape_site_stream_parallel,
+    scrape_site_stream_playwright,
+    scrape_site_stream_playwright_parallel,
+)
 from app.services.markdown import convert_to_markdown
 from app.storage import save_project
 
@@ -24,6 +30,7 @@ class ScrapeRequest(BaseModel):
     job_id: str | None = None
     parallel: bool = False
     concurrency: int = 8
+    use_playwright: bool = False
 
 class StopScrapeRequest(BaseModel):
     job_id: str
@@ -55,6 +62,7 @@ async def scrape_docs(request: ScrapeRequest):
             max_depth=request.max_depth,
             parallel=request.parallel,
             concurrency=request.concurrency,
+            use_playwright=request.use_playwright,
         )
 
         if not raw_pages:
@@ -133,20 +141,36 @@ async def scrape_docs_stream(request: ScrapeRequest):
 
             # Stream scraping progress
             raw_pages = []
-            stream = (
-                scrape_site_stream_parallel(
-                    url=url,
-                    max_pages=request.max_pages,
-                    max_depth=request.max_depth,
-                    concurrency=request.concurrency,
+            if request.use_playwright:
+                stream = (
+                    scrape_site_stream_playwright_parallel(
+                        url=url,
+                        max_pages=request.max_pages,
+                        max_depth=request.max_depth,
+                        concurrency=request.concurrency,
+                    )
+                    if request.parallel
+                    else scrape_site_stream_playwright(
+                        url=url,
+                        max_pages=request.max_pages,
+                        max_depth=request.max_depth,
+                    )
                 )
-                if request.parallel
-                else scrape_site_stream(
-                    url=url,
-                    max_pages=request.max_pages,
-                    max_depth=request.max_depth,
+            else:
+                stream = (
+                    scrape_site_stream_parallel(
+                        url=url,
+                        max_pages=request.max_pages,
+                        max_depth=request.max_depth,
+                        concurrency=request.concurrency,
+                    )
+                    if request.parallel
+                    else scrape_site_stream(
+                        url=url,
+                        max_pages=request.max_pages,
+                        max_depth=request.max_depth,
+                    )
                 )
-            )
             async for event in stream:
                 # Check for cancellation before processing event
                 if request.job_id and request.job_id in CANCELLED_JOBS:
