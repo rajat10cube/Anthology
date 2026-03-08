@@ -17,6 +17,8 @@
 
 LLMs don't know about libraries released after their training cutoff. Copy-pasting docs or building RAG systems isn't practical for most developers.
 
+On top of that, AI coding agents like Claude Code charge a premium for internet search — so every time your agent looks up a docs page, it costs extra. Feeding docs as context yourself is both cheaper and faster.
+
 ## The Solution
 
 Anthology scrapes any documentation website and converts it to well-structured Markdown files that you can feed directly into your LLM as context.
