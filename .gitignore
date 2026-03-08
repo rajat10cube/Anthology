@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Build output
+frontend/dist/
+*.egg-info/
+
+# Data (scraped docs — user-specific)
+backend/data/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test & cache
+.pytest_cache/
+.coverage
+htmlcov/
+.vitest/
+
+# Logs
+*.log
+npm-debug.log*
