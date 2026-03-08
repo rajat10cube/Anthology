@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Globe, Settings2, Zap, FileText, Loader2, CheckCircle2, ArrowRight, Gauge, Monitor } from "lucide-react";
+import { Globe, Settings2, Zap, FileText, Loader2, CheckCircle2, ArrowRight, Gauge, Monitor, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -254,7 +254,41 @@ export function ScrapeForm() {
         </div>
         {/* Parallel toggle */}
         <div className="flex flex-col justify-between gap-1">
-          <label className="text-sm text-muted-foreground block">Parallel Crawl</label>
+          <div className="flex items-center gap-1.5">
+            <label className="text-sm text-muted-foreground">Crawl Speed</label>
+            {/* Info icon with hover tooltip */}
+            <span className="relative group inline-flex items-center">
+              <Info className="w-3.5 h-3.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors cursor-help" />
+              {/* Tooltip popover */}
+              <div className="
+                pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50
+                w-72 p-3 rounded-lg text-xs leading-relaxed text-left
+                bg-popover border border-border shadow-lg
+                opacity-0 group-hover:opacity-100
+                translate-y-1 group-hover:translate-y-0
+                transition-all duration-200
+              ">
+                <p className="font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                  <Gauge className="w-3 h-3 text-primary" />
+                  Parallel <span className="text-muted-foreground font-normal">(default)</span>
+                </p>
+                <p className="text-muted-foreground mb-2.5">
+                  Fetches multiple pages simultaneously. Markedly faster, but uses more memory
+                  and puts higher load on the target server.
+                </p>
+                <p className="font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  Sequential
+                </p>
+                <p className="text-muted-foreground">
+                  Fetches one page at a time. Slower, but safer if you are getting rate-limited
+                  (429 errors) or if the target site is unstable.
+                </p>
+                {/* Tooltip arrow */}
+                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-popover border-r border-b border-border" />
+              </div>
+            </span>
+          </div>
           <div className="flex items-center gap-2 py-2">
             <Switch
               id="parallel-toggle"
@@ -262,20 +296,54 @@ export function ScrapeForm() {
               onCheckedChange={setParallel}
               disabled={isLoading || !showAdvanced}
             />
-            <span className={`w-24 text-sm font-medium flex items-center gap-1 ${
+            <span className={`w-36 text-sm font-medium flex items-center gap-1.5 ${
               parallel ? "text-primary" : "text-muted-foreground"
             }`}>
               {parallel
-                ? <><Gauge className="w-3.5 h-3.5" />Parallel</>
-                : <><Zap className="w-3.5 h-3.5" />Sequential</>}
+                ? <><Gauge className="w-3.5 h-3.5 shrink-0" />Parallel</>
+                : <><Zap className="w-3.5 h-3.5 shrink-0" />Sequential</>}
             </span>
           </div>
         </div>
-        {/* Playwright toggle */}
+        {/* Scrape mode toggle */}
         <div className="flex flex-col justify-between gap-1">
-          <label className="text-sm text-muted-foreground block" title="Use headless browser for JS-rendered sites">
-            Headless Browser
-          </label>
+          <div className="flex items-center gap-1.5">
+            <label className="text-sm text-muted-foreground">Scrape Mode</label>
+            {/* Info icon with hover tooltip */}
+            <span className="relative group inline-flex items-center">
+              <Info className="w-3.5 h-3.5 text-muted-foreground/60 hover:text-muted-foreground transition-colors cursor-help" />
+              {/* Tooltip popover */}
+              <div className="
+                pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50
+                w-72 p-3 rounded-lg text-xs leading-relaxed text-left
+                bg-popover border border-border shadow-lg
+                opacity-0 group-hover:opacity-100
+                translate-y-1 group-hover:translate-y-0
+                transition-all duration-200
+              ">
+                <p className="font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  Fast HTTP <span className="text-muted-foreground font-normal">(default)</span>
+                </p>
+                <p className="text-muted-foreground mb-2.5">
+                  Fetches pages directly with <code className="bg-muted px-1 rounded">httpx</code>.
+                  Fast and lightweight. Best for <strong className="text-foreground">static sites</strong> and
+                  documentation that is server-rendered (e.g. Read the Docs, GitHub Pages, plain HTML sites).
+                </p>
+                <p className="font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                  <Monitor className="w-3 h-3 text-primary" />
+                  Headless Browser <span className="text-muted-foreground font-normal">(Playwright)</span>
+                </p>
+                <p className="text-muted-foreground">
+                  Launches a real Chromium browser and waits for JavaScript to finish rendering.
+                  Slower and heavier, but required for <strong className="text-foreground">JS-heavy
+                  or SPA-based sites</strong> (e.g. Mintlify, Docusaurus, Nextra, VitePress).
+                </p>
+                {/* Tooltip arrow */}
+                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-popover border-r border-b border-border" />
+              </div>
+            </span>
+          </div>
           <div className="flex items-center gap-2 py-2">
             <Switch
               id="playwright-toggle"
@@ -283,12 +351,12 @@ export function ScrapeForm() {
               onCheckedChange={setUsePlaywright}
               disabled={isLoading || !showAdvanced}
             />
-            <span className={`w-24 text-sm font-medium flex items-center gap-1 ${
+            <span className={`w-36 text-sm font-medium flex items-center gap-1.5 ${
               usePlaywright ? "text-primary" : "text-muted-foreground"
             }`}>
               {usePlaywright
-                ? <><Monitor className="w-3.5 h-3.5" />Playwright</>
-                : <><Zap className="w-3.5 h-3.5" />HTTP</>}
+                ? <><Monitor className="w-3.5 h-3.5 shrink-0" />Headless Browser</>
+                : <><Zap className="w-3.5 h-3.5 shrink-0" />Fast HTTP</>}
             </span>
           </div>
         </div>

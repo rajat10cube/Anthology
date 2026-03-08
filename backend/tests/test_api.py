@@ -112,6 +112,20 @@ class TestScrapeEndpoint:
         assert response.status_code == 200
         assert response.json()["name"] == "docs.example.com"
 
+    def test_scrape_with_playwright_flag(self, test_client, tmp_data_dir):
+        """Test POST /api/scrape correctly passes use_playwright flag."""
+        with patch("app.routers.scrape.scrape_site", new_callable=AsyncMock, return_value=[{"id": "1", "url": "x", "title": "x", "html": "x"}]) as mock_scrape:
+            response = test_client.post("/api/scrape", json={
+                "url": "https://example.com",
+                "use_playwright": True,
+            })
+            
+        assert response.status_code == 200
+        # Verify the kwarg was passed True
+        mock_scrape.assert_called_once()
+        _, kwargs = mock_scrape.call_args
+        assert kwargs["use_playwright"] is True
+
     def test_scrape_no_pages_returns_400(self, test_client, tmp_data_dir):
         with patch("app.routers.scrape.scrape_site", new_callable=AsyncMock, return_value=[]):
             response = test_client.post("/api/scrape", json={
