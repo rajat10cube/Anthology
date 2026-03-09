@@ -165,3 +165,24 @@ def export_project_zip(project_id: str) -> tuple[bytes, str] | None:
 
     return buf.getvalue(), project_name
 
+
+def search_project(project_id: str, query: str) -> list[str]:
+    """Search for a text query across all pages in a project.
+
+    Returns:
+        A list of page IDs that contain the query (case-insensitive).
+    """
+    manifest = get_project(project_id)
+    if manifest is None:
+        return []
+
+    query_lower = query.lower()
+    matches = []
+
+    for page in manifest["pages"]:
+        content = get_page(project_id, page["id"])
+        if content and query_lower in content.lower():
+            matches.append(page["id"])
+
+    return matches
+

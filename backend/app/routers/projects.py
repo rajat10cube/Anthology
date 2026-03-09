@@ -8,7 +8,9 @@ from app.storage import (
     get_page,
     delete_project,
     export_project,
+    export_project,
     export_project_zip,
+    search_project,
 )
 
 router = APIRouter()
@@ -36,6 +38,17 @@ async def get_page_content(project_id: str, page_id: str):
     if content is None:
         raise HTTPException(status_code=404, detail="Page not found")
     return {"id": page_id, "content": content}
+
+
+@router.get("/projects/{project_id}/search")
+async def search_project_pages(project_id: str, q: str = Query(..., description="Search query")):
+    """Search all markdown pages in a project for a specific term.
+    
+    Returns:
+        JSON object with a list of page IDs where matches were found.
+    """
+    matches = search_project(project_id, q)
+    return {"matches": matches}
 
 
 @router.get("/projects/{project_id}/export")

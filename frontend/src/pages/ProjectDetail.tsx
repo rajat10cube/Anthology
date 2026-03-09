@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Trash2, FileText, ExternalLink, ChevronDown, FileArchive, LayoutList, BookOpen } from "lucide-react";
+import { ArrowLeft, Download, Trash2, FileText, ExternalLink, ChevronDown, FileArchive, LayoutList, BookOpen, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { cn } from "@/lib/utils";
@@ -13,17 +14,22 @@ export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [mobileTab, setMobileTab] = useState<MobileTab>("pages");
   const exportRef = useRef<HTMLDivElement>(null);
   const {
     selectedProject,
     selectedPageContent,
     selectedPageId,
+    searchResults,
     isLoading,
     loadProject,
     loadPage,
     removeProject,
     downloadExport,
+    searchProject,
+    clearSearch,
   } = useProjectStore();
 
   useEffect(() => {
@@ -50,6 +56,48 @@ export function ProjectDetail() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Effect: When searchResults changes and has matches, auto-select the first match
+  useEffect(() => {
+    if (searchResults && searchResults.length > 0 && selectedProject) {
+      // Only auto-switch if we aren't already viewing one of the matching pages
+      if (selectedPageId === null || !searchResults.includes(selectedPageId)) {
+        handlePageSelect(selectedProject.id, searchResults[0]);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchResults, selectedProject]);
+
+  const handleDelete = async () => {
+    if (selectedProject) {
+      await removeProject(selectedProject.id);
+      navigate("/library");
+    }
+  };
+
+  const handleExport = (format: "single" | "multi") => {
+    if (selectedProject) {
+      downloadExport(selectedProject.id, format);
+      setShowExportMenu(false);
+    }
+  };
+
+  const handlePageSelect = (projectId: string, pageId: string) => {
+    loadPage(projectId, pageId);
+    setMobileTab("content");
+  };
+
+  const handleSearchKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      await searchProject(searchTerm);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm("");
+    setIsSearchOpen(false);
+    clearSearch();
+  };
+
   if (isLoading && !selectedProject) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -66,20 +114,10 @@ export function ProjectDetail() {
     );
   }
 
-  const handleDelete = async () => {
-    await removeProject(selectedProject.id);
-    navigate("/library");
-  };
-
-  const handleExport = (format: "single" | "multi") => {
-    downloadExport(selectedProject.id, format);
-    setShowExportMenu(false);
-  };
-
-  const handlePageSelect = (projectId: string, pageId: string) => {
-    loadPage(projectId, pageId);
-    setMobileTab("content");
-  };
+  const displayedPages = selectedProject.pages.filter((page) => {
+    if (!searchResults) return true; // Show all if no active search
+    return searchResults.includes(page.id);
+  });
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden" id="project-detail">
@@ -99,6 +137,38 @@ export function ProjectDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {/* Search Bar */}
+          <div className="flex items-center">
+            {isSearchOpen ? (
+              <div className="flex items-center relative animate-fade-in mr-1 sm:mr-2">
+                <Input
+                  autoFocus
+                  placeholder="Search in page..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={handleSearchKeyPress}
+                  className="w-32 sm:w-64 h-8 pr-8"
+                />
+                <button
+                  onClick={handleClearSearch}
+                  className="absolute right-2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSearchOpen(true)}
+                className="mr-1"
+                title="Search in page"
+              >
+                <Search className="w-5 h-5" />
+              </Button>
+            )}
+          </div>
+
           {/* Export dropdown */}
           <div className="relative" ref={exportRef}>
             <Button
@@ -192,25 +262,34 @@ export function ProjectDetail() {
           id="page-sidebar"
         >
           <div className="p-4 absolute inset-0 overflow-y-auto">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Pages ({selectedProject.pages.length})
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center justify-between">
+              <span>Pages ({displayedPages.length})</span>
+              {searchResults !== null && (
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">Filtered</Badge>
+              )}
             </h2>
             <div className="space-y-1">
-              {selectedProject.pages.map((page) => (
-                <button
-                  key={page.id}
-                  onClick={() => handlePageSelect(selectedProject.id, page.id)}
-                  className={cn(
-                    "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-200 flex items-center gap-2 cursor-pointer",
-                    selectedPageId === page.id
-                      ? "bg-primary/15 text-primary border border-primary/20"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                  )}
-                >
-                  <FileText className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{page.title}</span>
-                </button>
-              ))}
+              {displayedPages.length === 0 ? (
+                 <div className="text-sm text-muted-foreground px-2 py-4 text-center">
+                    No matching pages found.
+                 </div>
+              ) : (
+                displayedPages.map((page) => (
+                  <button
+                    key={page.id}
+                    onClick={() => handlePageSelect(selectedProject.id, page.id)}
+                    className={cn(
+                      "w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-200 flex items-center gap-2 cursor-pointer",
+                      selectedPageId === page.id
+                        ? "bg-primary/15 text-primary border border-primary/20"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                    )}
+                  >
+                    <FileText className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{page.title}</span>
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </aside>
@@ -229,7 +308,7 @@ export function ProjectDetail() {
               </div>
             ) : (
               <div className="max-w-3xl mx-auto animate-fade-in">
-                <MarkdownRenderer content={selectedPageContent || ""} />
+                <MarkdownRenderer content={selectedPageContent || ""} searchTerm={searchTerm} />
               </div>
             )}
           </div>

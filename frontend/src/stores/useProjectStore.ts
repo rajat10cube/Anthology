@@ -5,6 +5,7 @@ import {
   fetchPage,
   deleteProjectApi,
   exportProjectApi,
+  searchProjectApi,
   type Project,
 } from "@/lib/api";
 
@@ -13,6 +14,7 @@ interface ProjectState {
   selectedProject: Project | null;
   selectedPageContent: string | null;
   selectedPageId: string | null;
+  searchResults: string[] | null;
   isLoading: boolean;
   error: string | null;
 
@@ -21,6 +23,8 @@ interface ProjectState {
   loadPage: (projectId: string, pageId: string) => Promise<void>;
   removeProject: (id: string) => Promise<void>;
   downloadExport: (id: string, format?: "single" | "multi") => Promise<void>;
+  searchProject: (query: string) => Promise<void>;
+  clearSearch: () => void;
   clearError: () => void;
 }
 
@@ -29,6 +33,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   selectedProject: null,
   selectedPageContent: null,
   selectedPageId: null,
+  searchResults: null,
   isLoading: false,
   error: null,
 
@@ -43,7 +48,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   loadProject: async (id: string) => {
-    set({ isLoading: true, error: null, selectedPageContent: null, selectedPageId: null });
+    set({ isLoading: true, error: null, selectedPageContent: null, selectedPageId: null, searchResults: null });
     try {
       const project = await fetchProject(id);
       set({ selectedProject: project, isLoading: false });
@@ -91,6 +96,24 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       set({ error: (err as Error).message });
     }
   },
+
+  searchProject: async (query: string) => {
+    const { selectedProject } = get();
+    if (!selectedProject || !query.trim()) {
+      set({ searchResults: null });
+      return;
+    }
+    
+    set({ isLoading: true, error: null });
+    try {
+      const matches = await searchProjectApi(selectedProject.id, query.trim());
+      set({ searchResults: matches, isLoading: false });
+    } catch (err) {
+      set({ error: (err as Error).message, isLoading: false, searchResults: null });
+    }
+  },
+
+  clearSearch: () => set({ searchResults: null }),
 
   clearError: () => set({ error: null }),
 }));

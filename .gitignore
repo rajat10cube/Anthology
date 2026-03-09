@@ -11,6 +11,7 @@ frontend/dist/
 
 # Data (scraped docs — user-specific)
 backend/data/
+backend/.anthology_cache/
 
 # Environment & secrets
 .env

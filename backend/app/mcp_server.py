@@ -1,5 +1,9 @@
 import asyncio
 import logging
+import json
+import tempfile
+import os
+import sys
 from typing import Any
 from urllib.parse import urlparse
 
@@ -68,7 +72,12 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="read_scraped_docs",
-            description="Fetches the full markdown content of a scraped project based on its ID.",
+            description=(
+                "Fetches the full markdown content of a scraped project based on its ID. "
+                "The server will write the multi-file JSON output directly to a temporary text "
+                "file on the host system and return the absolute file path to you. "
+                "ALWAYS prioritize using `jq` to read and parse the returned file path."
+            ),
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -136,14 +145,37 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         for page in manifest.get("pages", []):
             page_content = get_page(project_id, page["id"])
             if page_content:
-                # Add a clear filename/URL header so the AI knows what file this is.
+                # Store the file data in a dictionary mimicking the TextContent schema
                 header = f"File: {page['id']}.md\nSource: {page['url']}\n\n"
-                contents.append(TextContent(type="text", text=header + page_content))
+                contents.append({"type": "text", "text": header + page_content})
 
         if not contents:
              raise ValueError(f"Project '{project_id}' has no pages.")
 
-        return contents
+        # Create a local cache directory in the backend workspace
+        # This prevents Claude Code from rejecting read access to standard OS /tmp/ folders
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cache_dir = os.path.join(base_dir, ".anthology_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+
+        # Determine a human-readable filename based on snippet url
+        target_url = manifest.get("url", "")
+        # Remove everything except domain if possible to make cleaner filenames
+        safe_domain = urlparse(target_url).netloc if target_url else project_id
+        safe_domain = safe_domain.replace(":", "_") if safe_domain else "docs"
+        
+        # Write the JSON array to a local temp file payload
+        temp_path = os.path.join(cache_dir, f"{safe_domain}_{project_id}.json")
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            json.dump(contents, f)
+
+        msg = (
+            f"Successfully fetched {len(contents)} pages for project '{project_id}'.\n"
+            f"To prevent context window overflow, the full JSON array has been written to:\n"
+            f"{temp_path}\n\n"
+            f"Please use standard CLI tools (like `jq`) to query this absolute file path directly."
+        )
+        return [TextContent(type="text", text=msg)]
 
     elif name == "scrape_new_docs":
         url = arguments.get("url")

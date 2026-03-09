@@ -29,8 +29,9 @@ Anthology scrapes any documentation website and converts it to well-structured M
 
 ## ✨ Features
 
-- 🕷️ **Smart Scraper** — BFS crawl with configurable depth and page limits
+- 🕷️ **Parallel Scraper** — Asynchronous BFS crawl with configurable depth and concurrency
 - 📝 **Clean Markdown** — Strips nav, sidebars, footers; adds YAML frontmatter
+- 🔍 **Global Multi-Page Search** — Instantly scan the contents of all documents in a library simultaneously
 - 📊 **Real-time Progress** — SSE-powered live updates during scraping
 - 📚 **Library Management** — Browse, view, search, and delete scraped collections
 - 📦 **Flexible Export** — Single combined `.md` or `.zip` of individual files
@@ -74,32 +75,25 @@ Open **http://localhost:5173** and start scraping!
 
 ---
 
-## 🏗️ Architecture
+## 🤖 AI Agent Integration (MCP)
 
+Anthology includes a native Model Context Protocol (MCP) server, allowing AI coding assistants like **Claude Code** to autonomously scrape updated documentation and read it directly into their context window.
+
+### Using with Claude Code
+
+1. Ensure your Anthology backend environment is set up (see Quick Start).
+2. Add Anthology to Claude Code by passing the absolute paths to your virtual environment's Python executable and the `run_mcp.py` script:
+
+```bash
+claude mcp add anthology "/absolute/path/to/anthology/backend/.venv/bin/python" "/absolute/path/to/anthology/backend/run_mcp.py"
 ```
-Anthology/
-├── backend/                    # Python + FastAPI
-│   ├── app/
-│   │   ├── main.py             # App entry + CORS + routing
-│   │   ├── storage.py          # File-system CRUD
-│   │   ├── routers/
-│   │   │   ├── scrape.py       # POST /api/scrape (+ SSE stream)
-│   │   │   └── projects.py     # CRUD + export endpoints
-│   │   └── services/
-│   │       ├── scraper.py      # BFS web crawler
-│   │       └── markdown.py     # HTML → Markdown converter
-│   ├── tests/                  # 60 pytest tests
-│   └── requirements.txt
-│
-└── frontend/                   # React + Vite + Tailwind CSS v4
-    ├── src/
-    │   ├── components/         # Navbar, ScrapeForm, ProjectCard, MarkdownRenderer
-    │   ├── pages/              # Home, Library, ProjectDetail
-    │   ├── stores/             # Zustand state (projects, scrape)
-    │   ├── lib/                # API client, utils
-    │   └── __tests__/          # 42 Vitest tests
-    └── vite.config.ts
-```
+
+3. Start asking Claude questions! Example prompts:
+   - *"I need to know how to authenticate with the new Supabase API. Can you scrape their docs via Anthology using `scrape_new_docs`, then write the code for me?"*
+   - *"I don't know where the OpenClaw stores config, credentials, and sessions. Can you use Anthology to scrape https://docs.openclaw.ai/ and then tell me where it's stored? Please set the max_pages limit to 50, and use a max_depth of 3."*
+   - *"What scraped docs do you have in Anthology right now?"*
+
+*(Note: The MCP Server will aggressively cache scraped payloads into a local `.anthology_cache` directory to prevent context-limit crashes when dealing with massive documentation arrays).*
 
 ---
 
@@ -134,8 +128,8 @@ cd frontend && npm test
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | React 19, Vite, Tailwind CSS v4, shadcn/ui, Zustand |
-| **Backend** | Python 3.13, FastAPI, BeautifulSoup4, markdownify, httpx |
+| **Frontend** | React 19, Vite, Tailwind CSS v4, shadcn/ui, Zustand, mark.js |
+| **Backend** | Python 3.13, FastAPI, BeautifulSoup4, markdownify, httpx, Playwright, MCP |
 | **Testing** | pytest, Vitest, React Testing Library |
 
 ---

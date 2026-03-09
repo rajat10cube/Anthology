@@ -45,6 +45,14 @@ export async function exportProjectApi(id: string, format: "single" | "multi" = 
   return res.blob();
 }
 
+export async function searchProjectApi(id: string, query: string): Promise<string[]> {
+  const params = new URLSearchParams({ q: query });
+  const res = await fetch(`${API_BASE}/projects/${id}/search?${params}`);
+  if (!res.ok) throw new Error("Search failed");
+  const data = await res.json();
+  return data.matches;
+}
+
 export interface ScrapeRequest {
   url: string;
   name?: string;
