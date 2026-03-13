@@ -6,6 +6,8 @@ __pycache__/
 *.pyo
 
 # Build output
+dist/
+build/
 frontend/dist/
 *.egg-info/
 
