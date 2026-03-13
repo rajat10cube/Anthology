@@ -8,6 +8,7 @@
 [![Python 3.13](https://img.shields.io/badge/Python-3.13-blue.svg)](https://www.python.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)](https://fastapi.tiangolo.com/)
+[![PyPI](https://img.shields.io/pypi/v/anthology-mcp.svg)](https://pypi.org/project/anthology-mcp/)
 
 </div>
 
@@ -94,23 +95,32 @@ Open **http://localhost:5173** and start scraping!
 
 ## 🤖 AI Agent Integration (MCP)
 
-Anthology includes a native Model Context Protocol (MCP) server, allowing AI coding assistants like **Claude Code** to autonomously scrape updated documentation and read it directly into their context window.
+Anthology includes a native [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server, allowing AI coding assistants like **Claude Code** to autonomously scrape updated documentation and read it directly into their context window.
 
-### Using with Claude Code
+### Option A: Install from [PyPI](https://pypi.org/project/anthology-mcp/) (recommended)
 
-1. Ensure your Anthology backend environment is set up (see Quick Start).
-2. Add Anthology to Claude Code by passing the absolute paths to your virtual environment's Python executable and the `run_mcp.py` script:
+```bash
+pipx install anthology-mcp
+claude mcp add anthology -- anthology-mcp
+```
+
+That's it — two commands. Start asking Claude to scrape docs!
+
+### Option B: From source
+
+If you already cloned the repo:
 
 ```bash
 claude mcp add anthology "/absolute/path/to/anthology/backend/.venv/bin/python" "/absolute/path/to/anthology/backend/run_mcp.py"
 ```
 
-3. Start asking Claude questions! Example prompts:
-   - *"I need to know how to authenticate with the new Supabase API. Can you scrape their docs via Anthology using `scrape_new_docs`, then write the code for me?"*
-   - *"I don't know where the OpenClaw stores config, credentials, and sessions. Can you use Anthology to scrape https://docs.openclaw.ai/ and then tell me where it's stored? Please set the max_pages limit to 50, and use a max_depth of 3."*
-   - *"What scraped docs do you have in Anthology right now?"*
+### Example Prompts
 
-*(Note: The MCP Server will aggressively cache scraped payloads into a local `.anthology_cache` directory to prevent context-limit crashes when dealing with massive documentation arrays).*
+- *"Scrape the Supabase auth docs via Anthology, then write the login code for me."*
+- *"Use Anthology to scrape https://docs.openclaw.ai/ with max_pages=50 and max_depth=3, then tell me where config is stored."*
+- *"What scraped docs do you have in Anthology right now?"*
+
+> **Note:** When installed via pipx, scraped data is stored in `~/.anthology/data/` and cache in `~/.anthology/cache/`. When running from source, data stays in `backend/data/`.
 
 ---
 

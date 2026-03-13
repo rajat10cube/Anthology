@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anthology-mcp"
+version = "0.1.2"
+description = "MCP server for Anthology — scrape documentation sites into AI-ready Markdown"
+readme = "README.md"
+license = "AGPL-3.0-only"
+requires-python = ">=3.11"
+authors = [
+    { name = "Rajat Khandelwal" },
+]
+keywords = ["mcp", "llm", "documentation", "scraper", "markdown", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Text Processing :: Markup :: Markdown",
+]
+
+dependencies = [
+    "httpx>=0.27",
+    "beautifulsoup4>=4.12",
+    "markdownify>=0.12",
+    "mcp>=1.0",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+playwright = ["playwright>=1.40"]
+
+[project.urls]
+Homepage = "https://github.com/rajat10cube/Anthology"
+Repository = "https://github.com/rajat10cube/Anthology"
+Issues = "https://github.com/rajat10cube/Anthology/issues"
+
+[project.scripts]
+anthology-mcp = "app.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

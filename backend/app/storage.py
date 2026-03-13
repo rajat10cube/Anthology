@@ -13,12 +13,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Use env var or default to backend/data
+# Resolve data directory:
+#   1. DATA_DIR env var (Docker, custom)
+#   2. backend/data/ if running from source (dev)
+#   3. ~/.anthology/data/ for pip/pipx installs
 custom_data_dir = os.getenv("DATA_DIR")
 if custom_data_dir:
     DATA_DIR = Path(custom_data_dir)
 else:
-    DATA_DIR = Path(__file__).parent.parent / "data"
+    # Check if we're in the source repo (backend/data/ sibling exists or is creatable)
+    source_data = Path(__file__).parent.parent / "data"
+    if source_data.parent.name == "backend" and (source_data.parent / "requirements.txt").exists():
+        DATA_DIR = source_data
+    else:
+        # pip/pipx install — use a stable user directory
+        DATA_DIR = Path.home() / ".anthology" / "data"
 
 
 def _ensure_data_dir() -> None:

@@ -152,10 +152,13 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         if not contents:
              raise ValueError(f"Project '{project_id}' has no pages.")
 
-        # Create a local cache directory in the backend workspace
-        # This prevents Claude Code from rejecting read access to standard OS /tmp/ folders
+        # Cache directory: use ~/.anthology/cache/ for pip installs,
+        # or backend/.anthology_cache/ when running from source
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        cache_dir = os.path.join(base_dir, ".anthology_cache")
+        if os.path.basename(base_dir) == "backend" and os.path.exists(os.path.join(base_dir, "requirements.txt")):
+            cache_dir = os.path.join(base_dir, ".anthology_cache")
+        else:
+            cache_dir = os.path.join(os.path.expanduser("~"), ".anthology", "cache")
         os.makedirs(cache_dir, exist_ok=True)
 
         # Determine a human-readable filename based on snippet url
