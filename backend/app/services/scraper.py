@@ -1,7 +1,10 @@
 """Web scraper service — crawls documentation sites and extracts content."""
 import asyncio
+import gzip
 import hashlib
 import re
+import xml.etree.ElementTree as ET
+from io import BytesIO
 from urllib.parse import urljoin, urlparse, urldefrag
 from typing import Any, AsyncIterator
 
@@ -141,6 +144,102 @@ def _build_client() -> httpx.AsyncClient:
     )
 
 
+# ── Sitemap discovery ──────────────────────────────────────────────────
+
+_SITEMAP_NS = {
+    "sm": "http://www.sitemaps.org/schemas/sitemap/0.9",
+}
+
+
+def _parse_sitemap_xml(content: str) -> tuple[list[str], list[str]]:
+    """Parse sitemap XML and return (page_urls, child_sitemap_urls)."""
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return [], []
+
+    page_urls: list[str] = []
+    sitemap_urls: list[str] = []
+
+    # Strip namespace for easier matching
+    tag = root.tag.split("}")[-1] if "}" in root.tag else root.tag
+
+    if tag == "urlset":
+        # Standard sitemap: <urlset> → <url> → <loc>
+        for url_el in root.findall("sm:url/sm:loc", _SITEMAP_NS):
+            if url_el.text:
+                page_urls.append(url_el.text.strip())
+        # Fallback: try without namespace
+        if not page_urls:
+            for url_el in root.iter():
+                ltag = url_el.tag.split("}")[-1] if "}" in url_el.tag else url_el.tag
+                if ltag == "loc" and url_el.text:
+                    page_urls.append(url_el.text.strip())
+
+    elif tag == "sitemapindex":
+        # Sitemap index: <sitemapindex> → <sitemap> → <loc>
+        for loc_el in root.findall("sm:sitemap/sm:loc", _SITEMAP_NS):
+            if loc_el.text:
+                sitemap_urls.append(loc_el.text.strip())
+        # Fallback: try without namespace
+        if not sitemap_urls:
+            for el in root.iter():
+                ltag = el.tag.split("}")[-1] if "}" in el.tag else el.tag
+                if ltag == "loc" and el.text:
+                    sitemap_urls.append(el.text.strip())
+
+    return page_urls, sitemap_urls
+
+
+async def _discover_sitemap_urls(
+    base_url: str,
+    client: httpx.AsyncClient,
+    max_sitemaps: int = 20,
+) -> list[str]:
+    """Discover page URLs from sitemap.xml.
+
+    Handles standard sitemaps, sitemap index files, and gzip-compressed
+    sitemaps.  Returns an empty list when the sitemap is unavailable or
+    unparseable — the caller should fall back to regular BFS discovery.
+    """
+    parsed = urlparse(base_url)
+    sitemap_url = f"{parsed.scheme}://{parsed.netloc}/sitemap.xml"
+
+    all_urls: list[str] = []
+    pending = [sitemap_url]
+    visited_sitemaps: set[str] = set()
+
+    while pending and len(visited_sitemaps) < max_sitemaps:
+        url = pending.pop(0)
+        if url in visited_sitemaps:
+            continue
+        visited_sitemaps.add(url)
+
+        try:
+            resp = await client.get(url, timeout=15.0)
+            if resp.status_code != 200:
+                continue
+
+            # Handle gzip-compressed sitemaps
+            if url.lower().endswith(".gz"):
+                try:
+                    content = gzip.decompress(resp.content).decode("utf-8")
+                except Exception:
+                    continue
+            else:
+                content = resp.text
+
+            page_urls, child_sitemaps = _parse_sitemap_xml(content)
+            all_urls.extend(page_urls)
+            pending.extend(child_sitemaps)
+
+        except (httpx.HTTPError, Exception):
+            continue
+
+    # Filter through _is_doc_link so only relevant doc pages are kept
+    return [u for u in dict.fromkeys(all_urls) if _is_doc_link(u, base_url)]
+
+
 async def scrape_site(
     url: str,
     max_pages: int = 50,
@@ -148,6 +247,7 @@ async def scrape_site(
     parallel: bool = False,
     concurrency: int = 8,
     use_playwright: bool = False,
+    use_sitemap: bool = True,
 ) -> list[dict[str, Any]]:
     """Scrape a documentation site.
 
@@ -158,6 +258,7 @@ async def scrape_site(
         parallel: If True, use concurrent fetching.
         concurrency: Max simultaneous requests in parallel mode.
         use_playwright: If True, use headless Chromium instead of httpx.
+        use_sitemap: If True, discover URLs from sitemap.xml first.
 
     Returns:
         List of dicts with keys: id, url, title, html.
@@ -165,15 +266,15 @@ async def scrape_site(
     results: list[dict[str, Any]] = []
     if use_playwright:
         stream = (
-            scrape_site_stream_playwright_parallel(url, max_pages, max_depth, concurrency)
+            scrape_site_stream_playwright_parallel(url, max_pages, max_depth, concurrency, use_sitemap=use_sitemap)
             if parallel
-            else scrape_site_stream_playwright(url, max_pages, max_depth)
+            else scrape_site_stream_playwright(url, max_pages, max_depth, use_sitemap=use_sitemap)
         )
     else:
         stream = (
-            scrape_site_stream_parallel(url, max_pages, max_depth, concurrency)
+            scrape_site_stream_parallel(url, max_pages, max_depth, concurrency, use_sitemap=use_sitemap)
             if parallel
-            else scrape_site_stream(url, max_pages, max_depth)
+            else scrape_site_stream(url, max_pages, max_depth, use_sitemap=use_sitemap)
         )
     async for event in stream:
         if event["type"] == "page_scraped":
@@ -185,10 +286,12 @@ async def scrape_site_stream(
     url: str,
     max_pages: int = 50,
     max_depth: int = 3,
+    use_sitemap: bool = True,
 ) -> AsyncIterator[dict[str, Any]]:
     """Scrape a documentation site via sequential BFS crawl, yielding progress events.
 
     Yields dicts with a "type" key:
+        - {"type": "sitemap_discovered", "urls_found": N}
         - {"type": "page_scraped", "page": {...}, "scraped": N, "queued": M}
         - {"type": "page_skipped", "url": ..., "reason": ...}
     """
@@ -200,6 +303,16 @@ async def scrape_site_stream(
     queue: list[tuple[str, int]] = [(base_url, 0)]
 
     async with _build_client() as client:
+        # Seed queue from sitemap if enabled
+        if use_sitemap:
+            sitemap_urls = await _discover_sitemap_urls(base_url, client)
+            if sitemap_urls:
+                for surl in sitemap_urls:
+                    norm = _normalize_url(surl)
+                    if norm not in visited and norm != base_url:
+                        queue.append((norm, 0))
+                yield {"type": "sitemap_discovered", "urls_found": len(sitemap_urls)}
+
         while queue and scraped_count < max_pages:
             current_url, depth = queue.pop(0)
 
@@ -262,6 +375,7 @@ async def scrape_site_stream_parallel(
     max_pages: int = 50,
     max_depth: int = 3,
     concurrency: int = 8,
+    use_sitemap: bool = True,
 ) -> AsyncIterator[dict[str, Any]]:
     """Scrape a documentation site with concurrent fetching, yielding progress events.
 
@@ -330,11 +444,26 @@ async def scrape_site_stream_parallel(
                     "reason": "error",
                 })
 
-    # Seed with root URL
+    # Discover sitemap URLs if enabled
+    sitemap_seed_urls: list[str] = []
+    if use_sitemap:
+        async with _build_client() as sitemap_client:
+            sitemap_urls = await _discover_sitemap_urls(base_url, sitemap_client)
+        if sitemap_urls:
+            for surl in sitemap_urls:
+                norm = _normalize_url(surl)
+                if norm != base_url:
+                    visited.add(norm)
+                    sitemap_seed_urls.append(norm)
+            yield {"type": "sitemap_discovered", "urls_found": len(sitemap_urls)}
+
+    # Seed with root URL + sitemap-discovered URLs
     visited.add(base_url)
     new_tasks: list[asyncio.Task] = []
-    root_task = asyncio.create_task(fetch_page(base_url, 0))
-    all_tasks: list[asyncio.Task] = [root_task]
+    seed_urls = [base_url] + sitemap_seed_urls
+    all_tasks: list[asyncio.Task] = [
+        asyncio.create_task(fetch_page(u, 0)) for u in seed_urls
+    ]
 
     # Drain events as tasks complete
     while all_tasks:
@@ -372,6 +501,7 @@ async def scrape_site_stream_playwright(
     url: str,
     max_pages: int = 50,
     max_depth: int = 3,
+    use_sitemap: bool = True,
 ) -> AsyncIterator[dict[str, Any]]:
     """Scrape via sequential BFS using a headless Playwright browser.
 
@@ -390,6 +520,17 @@ async def scrape_site_stream_playwright(
     visited: set[str] = set()
     scraped_count = 0
     queue: list[tuple[str, int]] = [(base_url, 0)]
+
+    # Seed queue from sitemap if enabled
+    if use_sitemap:
+        async with _build_client() as client:
+            sitemap_urls = await _discover_sitemap_urls(base_url, client)
+        if sitemap_urls:
+            for surl in sitemap_urls:
+                norm = _normalize_url(surl)
+                if norm not in visited and norm != base_url:
+                    queue.append((norm, 0))
+            yield {"type": "sitemap_discovered", "urls_found": len(sitemap_urls)}
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
@@ -455,6 +596,7 @@ async def scrape_site_stream_playwright_parallel(
     max_pages: int = 50,
     max_depth: int = 3,
     concurrency: int = 4,
+    use_sitemap: bool = True,
 ) -> AsyncIterator[dict[str, Any]]:
     """Scrape via parallel BFS using a headless Playwright browser.
 
@@ -530,9 +672,25 @@ async def scrape_site_stream_playwright_parallel(
                 finally:
                     await page.close()
 
+        # Discover sitemap URLs if enabled
+        sitemap_seed_urls: list[str] = []
+        if use_sitemap:
+            async with _build_client() as sitemap_client:
+                sitemap_urls = await _discover_sitemap_urls(base_url, sitemap_client)
+            if sitemap_urls:
+                for surl in sitemap_urls:
+                    norm = _normalize_url(surl)
+                    if norm != base_url:
+                        visited.add(norm)
+                        sitemap_seed_urls.append(norm)
+                yield {"type": "sitemap_discovered", "urls_found": len(sitemap_urls)}
+
+        # Seed with root URL + sitemap-discovered URLs
         visited.add(base_url)
-        root_task = asyncio.create_task(fetch_page(base_url, 0))
-        all_tasks: list[asyncio.Task] = [root_task]
+        seed_urls = [base_url] + sitemap_seed_urls
+        all_tasks: list[asyncio.Task] = [
+            asyncio.create_task(fetch_page(u, 0)) for u in seed_urls
+        ]
 
         try:
             while all_tasks:

@@ -184,6 +184,10 @@ async def scrape_docs_stream(request: ScrapeRequest):
                         "scraped": event["scraped"],
                         "queued": event["queued"],
                     })
+                elif event["type"] == "sitemap_discovered":
+                    yield _sse("sitemap_discovered", {
+                        "urls_found": event["urls_found"],
+                    })
 
             if not raw_pages:
                 yield _sse("error", {

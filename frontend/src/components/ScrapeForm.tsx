@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Globe, Settings2, Zap, FileText, Loader2, CheckCircle2, ArrowRight, Gauge, Monitor, Info } from "lucide-react";
+import { Globe, Settings2, Zap, FileText, Loader2, CheckCircle2, ArrowRight, Gauge, Monitor, Info, Map } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -15,7 +15,7 @@ export function ScrapeForm() {
   const [usePlaywright, setUsePlaywright] = useState(false);
   const {
     isLoading, error, result, phase,
-    scrapedPages, scrapedCount, queuedCount, siteName,
+    scrapedPages, scrapedCount, queuedCount, sitemapUrlsFound, siteName,
     startScrape, stopScrape, reset,
   } = useScrapeStore();
   const navigate = useNavigate();
@@ -116,6 +116,12 @@ export function ScrapeForm() {
                 <>
                   <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   {queuedCount > 0 ? `${Math.min(queuedCount, maxPages - scrapedCount)} pages queued` : "Discovering pages..."}
+                  {sitemapUrlsFound > 0 && (
+                    <span className="ml-1.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-medium">
+                      <Map className="w-2.5 h-2.5 inline mr-0.5 -mt-px" />
+                      {sitemapUrlsFound} from sitemap
+                    </span>
+                  )}
                 </>
               )}
             </span>
@@ -229,7 +235,7 @@ export function ScrapeForm() {
         </button>
       </div>
 
-      <div className={`mt-3 glass p-4 rounded-lg flex gap-4 transition-opacity duration-200 ${showAdvanced ? "visible opacity-100" : "invisible opacity-0 pointer-events-none"}`}>
+      <div className={`mt-3 glass p-4 rounded-lg grid grid-cols-4 gap-6 transition-opacity duration-200 ${showAdvanced ? "visible opacity-100" : "invisible opacity-0 pointer-events-none"}`}>
         <div className="flex-1">
           <label className="text-sm text-muted-foreground mb-1 block">Max Pages</label>
           <Input
@@ -253,7 +259,7 @@ export function ScrapeForm() {
           />
         </div>
         {/* Parallel toggle */}
-        <div className="flex flex-col justify-between gap-1">
+        <div className="flex-1 flex flex-col justify-between gap-1">
           <div className="flex items-center gap-1.5">
             <label className="text-sm text-muted-foreground">Crawl Speed</label>
             {/* Info icon with hover tooltip */}
@@ -306,7 +312,7 @@ export function ScrapeForm() {
           </div>
         </div>
         {/* Scrape mode toggle */}
-        <div className="flex flex-col justify-between gap-1">
+        <div className="flex-1 flex flex-col justify-between gap-1">
           <div className="flex items-center gap-1.5">
             <label className="text-sm text-muted-foreground">Scrape Mode</label>
             {/* Info icon with hover tooltip */}

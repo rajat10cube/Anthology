@@ -16,6 +16,7 @@ interface ScrapeState {
   scrapedPages: ScrapedPage[];
   scrapedCount: number;
   queuedCount: number;
+  sitemapUrlsFound: number;
   siteName: string | null;
   jobId: string | null;
 
@@ -32,6 +33,7 @@ export const useScrapeStore = create<ScrapeState>((set, get) => ({
   scrapedPages: [],
   scrapedCount: 0,
   queuedCount: 0,
+  sitemapUrlsFound: 0,
   siteName: null,
   jobId: null,
 
@@ -45,6 +47,7 @@ export const useScrapeStore = create<ScrapeState>((set, get) => ({
       scrapedPages: [],
       scrapedCount: 0,
       queuedCount: 0,
+      sitemapUrlsFound: 0,
       siteName: null,
       jobId,
     });
@@ -131,6 +134,7 @@ export const useScrapeStore = create<ScrapeState>((set, get) => ({
       scrapedPages: [],
       scrapedCount: 0,
       queuedCount: 0,
+      sitemapUrlsFound: 0,
       siteName: null,
       jobId: null,
     }),
@@ -156,6 +160,10 @@ function _handleEvent(
       });
       break;
     }
+
+    case "sitemap_discovered":
+      set({ sitemapUrlsFound: data.urls_found });
+      break;
 
     case "converting":
       set({ phase: "converting" });

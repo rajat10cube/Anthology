@@ -30,6 +30,7 @@ Anthology scrapes any documentation website and converts it to well-structured M
 ## ✨ Features
 
 - 🕷️ **Parallel Scraper** — Asynchronous BFS crawl with configurable depth and concurrency
+- 🗺️ **Sitemap Discovery** — Automatically fetches `sitemap.xml` to find all pages before crawling, including sitemap index files and gzip-compressed sitemaps
 - 📝 **Clean Markdown** — Strips nav, sidebars, footers; adds YAML frontmatter
 - 🔍 **Global Multi-Page Search** — Instantly scan the contents of all documents in a library simultaneously
 - 📊 **Real-time Progress** — SSE-powered live updates during scraping
@@ -114,7 +115,7 @@ claude mcp add anthology "/absolute/path/to/anthology/backend/.venv/bin/python" 
 ## 🧪 Testing
 
 ```bash
-# Backend (60 tests)
+# Backend (77 tests)
 cd backend && source .venv/bin/activate
 python -m pytest tests/ -v
 
