@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 
+from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
 
@@ -22,6 +23,10 @@ def convert_to_markdown(
     Returns:
         Markdown string with YAML frontmatter.
     """
+    # Resolve relative URLs to absolute before conversion
+    if source_url:
+        html = _resolve_relative_urls(html, source_url)
+
     # Convert HTML to Markdown
     markdown = md(
         html,
@@ -38,6 +43,33 @@ def convert_to_markdown(
     frontmatter = _build_frontmatter(title, source_url)
 
     return f"{frontmatter}\n{markdown}"
+
+
+def _resolve_relative_urls(html: str, page_url: str) -> str:
+    """Resolve relative src/href attributes in HTML to absolute URLs.
+
+    This ensures images and links in the exported Markdown point to valid
+    absolute URLs rather than broken relative paths.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Resolve image sources
+    for img in soup.find_all("img", src=True):
+        src = img["src"]
+        if not src.startswith(("data:", "mailto:")):
+            img["src"] = urljoin(page_url, src)
+
+    # Resolve link hrefs
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if not href.startswith(("data:", "mailto:", "javascript:", "#")):
+            a["href"] = urljoin(page_url, href)
+
+    # Resolve source elements (picture tags)
+    for source in soup.find_all("source", srcset=True):
+        source["srcset"] = urljoin(page_url, source["srcset"])
+
+    return str(soup)
 
 
 def _detect_language(el) -> str | None:

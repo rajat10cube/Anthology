@@ -1,6 +1,11 @@
 """Tests for the markdown conversion service."""
 import pytest
-from app.services.markdown import convert_to_markdown, _clean_markdown, _build_frontmatter
+from app.services.markdown import (
+    convert_to_markdown,
+    _clean_markdown,
+    _build_frontmatter,
+    _resolve_relative_urls,
+)
 
 
 class TestConvertToMarkdown:
@@ -40,6 +45,73 @@ class TestConvertToMarkdown:
     def test_empty_html(self):
         result = convert_to_markdown("", title="Empty")
         assert 'title: "Empty"' in result
+
+    def test_resolves_relative_image_urls(self):
+        html = '<img src="../assets/image.png" alt="screenshot">'
+        result = convert_to_markdown(
+            html,
+            title="Test",
+            source_url="https://docs.example.com/starter/page.html",
+        )
+        assert "https://docs.example.com/assets/image.png" in result
+        assert "../assets/image.png" not in result
+
+    def test_preserves_absolute_image_urls(self):
+        html = '<img src="https://cdn.example.com/image.png" alt="screenshot">'
+        result = convert_to_markdown(
+            html,
+            title="Test",
+            source_url="https://docs.example.com/page.html",
+        )
+        assert "https://cdn.example.com/image.png" in result
+
+
+class TestResolveRelativeUrls:
+    def test_resolves_relative_image_src(self):
+        html = '<img src="../assets/image.png" alt="test">'
+        result = _resolve_relative_urls(html, "https://docs.example.com/starter/page.html")
+        assert "https://docs.example.com/assets/image.png" in result
+
+    def test_resolves_root_relative_image_src(self):
+        html = '<img src="/assets/logo.png" alt="logo">'
+        result = _resolve_relative_urls(html, "https://docs.example.com/starter/page.html")
+        assert "https://docs.example.com/assets/logo.png" in result
+
+    def test_preserves_absolute_image_src(self):
+        html = '<img src="https://cdn.example.com/image.png" alt="test">'
+        result = _resolve_relative_urls(html, "https://docs.example.com/page.html")
+        assert "https://cdn.example.com/image.png" in result
+
+    def test_preserves_data_uri(self):
+        html = '<img src="data:image/svg+xml;base64,PHN2Zz4=" alt="icon">'
+        result = _resolve_relative_urls(html, "https://docs.example.com/page.html")
+        assert "data:image/svg+xml;base64,PHN2Zz4=" in result
+
+    def test_resolves_link_href(self):
+        html = '<a href="../guide.html">Guide</a>'
+        result = _resolve_relative_urls(html, "https://docs.example.com/starter/page.html")
+        assert "https://docs.example.com/guide.html" in result
+
+    def test_preserves_anchor_links(self):
+        html = '<a href="#section">Section</a>'
+        result = _resolve_relative_urls(html, "https://docs.example.com/page.html")
+        assert '#section' in result
+
+    def test_preserves_javascript_links(self):
+        html = '<a href="javascript:void(0)">Click</a>'
+        result = _resolve_relative_urls(html, "https://docs.example.com/page.html")
+        assert "javascript:void(0)" in result
+
+    def test_resolves_multiple_elements(self):
+        html = '''
+        <img src="../img1.png" alt="one">
+        <a href="other.html">Link</a>
+        <img src="../../img2.png" alt="two">
+        '''
+        result = _resolve_relative_urls(html, "https://docs.example.com/a/b/page.html")
+        assert "https://docs.example.com/a/img1.png" in result
+        assert "https://docs.example.com/a/b/other.html" in result
+        assert "https://docs.example.com/img2.png" in result
 
 
 class TestCleanMarkdown:
