@@ -44,17 +44,33 @@ Anthology scrapes any documentation website and converts it to well-structured M
 
 ### Prerequisites
 
+- **Docker** (recommended) — or Node.js ≥ 18 + Python ≥ 3.11 for manual setup
+
+### Option A: Docker (recommended)
+
+```bash
+git clone https://github.com/rajat10cube/anthology.git
+cd anthology
+docker compose up --build
+```
+
+Open **http://localhost:3000** and start scraping!
+
+### Option B: Manual Setup
+
+#### Prerequisites
+
 - Node.js ≥ 18
 - Python ≥ 3.11
 
-### 1. Clone
+#### 1. Clone
 
 ```bash
 git clone https://github.com/rajat10cube/anthology.git
 cd anthology
 ```
 
-### 2. Backend
+#### 2. Backend
 
 ```bash
 cd backend
@@ -64,7 +80,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 3. Frontend
+#### 3. Frontend
 
 ```bash
 cd frontend
@@ -131,6 +147,7 @@ cd frontend && npm test
 |-------|-----------|
 | **Frontend** | React 19, Vite, Tailwind CSS v4, shadcn/ui, Zustand, mark.js |
 | **Backend** | Python 3.13, FastAPI, BeautifulSoup4, markdownify, httpx, Playwright, MCP |
+| **Infra** | Docker, nginx |
 | **Testing** | pytest, Vitest, React Testing Library |
 
 ---

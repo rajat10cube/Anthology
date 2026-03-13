@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - anthology_data:/app/data
+    environment:
+      - DATA_DIR=/app/data
+      - ALLOWED_ORIGINS=http://localhost:3000
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  anthology_data:
