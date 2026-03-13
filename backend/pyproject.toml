@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "anthology-mcp"
-version = "0.1.2"
+version = "0.1.3"
 description = "MCP server for Anthology — scrape documentation sites into AI-ready Markdown"
 readme = "README.md"
 license = "AGPL-3.0-only"
 requires-python = ">=3.11"
 authors = [
-    { name = "Rajat Khandelwal" },
+    { name = "r10cube" },
 ]
 keywords = ["mcp", "llm", "documentation", "scraper", "markdown", "ai"]
 classifiers = [
@@ -38,9 +38,9 @@ dependencies = [
 playwright = ["playwright>=1.40"]
 
 [project.urls]
-Homepage = "https://github.com/rajat10cube/Anthology"
-Repository = "https://github.com/rajat10cube/Anthology"
-Issues = "https://github.com/rajat10cube/Anthology/issues"
+Homepage = "https://github.com/r10cube/Anthology"
+Repository = "https://github.com/r10cube/Anthology"
+Issues = "https://github.com/r10cube/Anthology/issues"
 
 [project.scripts]
 anthology-mcp = "app.cli:main"

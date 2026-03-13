@@ -20,10 +20,28 @@ except ImportError:
 
 # Elements to remove before extracting content
 STRIP_TAGS = [
+    # HTML elements
     "nav", "footer", "header", "aside", "script", "style", "noscript",
-    "svg", "iframe", "form", ".sidebar", ".nav", ".footer", ".header",
-    ".menu", ".toc", ".table-of-contents", ".breadcrumb", ".pagination",
+    "svg", "iframe", "form",
+    # Layout / navigation classes
+    ".sidebar", ".nav", ".footer", ".header",
+    ".menu", ".toc", ".table-of-contents", ".breadcrumb", ".breadcrumbs",
+    ".pagination",
+    # ARIA roles
     "[role='navigation']", "[role='banner']", "[role='contentinfo']",
+    # Modals & overlays
+    ".modal", ".popup", "#modal", ".overlay",
+    # Ads
+    ".ad", ".ads", ".advert", "#ad",
+    # Cookie / consent banners
+    ".cookie", "#cookie", ".cookie-banner", ".consent",
+    # Language selectors
+    ".lang-selector", ".language", "#language-selector",
+    # Social & share widgets
+    ".social", ".social-media", ".social-links", "#social",
+    ".share", "#share",
+    # Generic widgets
+    ".widget", "#widget",
 ]
 
 # Selectors to find main content area, tried in order
